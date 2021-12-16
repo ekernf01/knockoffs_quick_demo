@@ -1,6 +1,8 @@
 setwd("~/Desktop/jhu/research/projects/knockoffs/applications/package_demo/")
 library("ggplot2")
 library("magrittr")
+ggplot2::theme_update(text = element_text(family = "ArialMT"))
+
 results = data.frame(dimension = c(2, 5, 10, 20, 50, 100)*10,
                      time_rlookc =NA, time_knockoff = NA,
                      memory_rlookc = NA, memory_knockoff = NA)

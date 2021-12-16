@@ -1,4 +1,8 @@
-setwd("~/Desktop/jhu/research/projects/knockoffs/applications/q_values")
+setwd("~/Desktop/jhu/research/projects/knockoffs/applications/package_demo/")
+library("magrittr")
+library("dplyr")
+library("ggplot2")
+ggplot2::theme_update(text = element_text(family = "ArialMT"))
 
 # Simulation is based on DREAM5 e coli data
 withr::with_dir(
@@ -11,10 +15,10 @@ withr::with_dir(
 )
 head(ecoli_expression)
 dim(ecoli_expression)
-ecoli_expression %<>% sweep(2, colMeans(ecoli_tf_expression), FUN = "-")
+ecoli_expression %<>% sweep(2, colMeans(ecoli_expression), FUN = "-")
 ecoli_tf_expression = ecoli_expression[ecoli_tf[[1]]] %>% as.matrix
-ecoli_tf_covariance = cov(ecoli_tf_expression)
-
+ecoli_tf_covariance = corpcor::cor.shrink(ecoli_tf_expression)
+ecoli_tf_covariance = matrix(ecoli_tf_covariance, dimnames = dimnames(ecoli_tf_covariance), nrow = nrow(ecoli_tf_covariance))
 # But, all data are simulated and Gaussian with0 mean and known covariance.
 set.seed(0)
 ecoli_tf_covariance_sqrt = chol(ecoli_tf_covariance)
@@ -29,7 +33,8 @@ W = coef(lm(Y ~ X + 0)) -  coef(lm(Y ~ X_k + 0))
 W %<>% reshape2::melt(value.name = "knockoff_stat")
 colnames(W)[1:2] = c("feature", "target")
 W %<>% mutate(feature = gsub("X", "", feature))
-# Demons of different pooling methods
+write.csv(W, "threshold_demo.csv")
+# Demonstration of different pooling methods
 ggplot(W %>% subset(target %in% paste0("G", 1:5))) + 
   geom_histogram(aes(x = knockoff_stat, fill = target)) + 
   ggtitle("Combining multiple knockoff runs")
@@ -44,7 +49,7 @@ ggplot(W) +
   geom_point(aes(x = q_merged, y = q_separate, color = is_correct)) + 
   xlim(0:1) + ylim(0:1) + 
   ggtitle("Merging is a more powerful approach")
-ggsave("merge_power.png", width = 5, height = 5)
+ggsave("merge_power.pdf", width = 5, height = 5)
 W %<>% dplyr::arrange(q_merged)
 W$empirical_fdr_merged   = not(W$is_correct) %>% cumsum %>% divide_by(1:nrow(W))
 W %<>% dplyr::arrange(q_separate)
@@ -59,28 +64,24 @@ W_long = W %>%
                       names_to = "empirical_fdr_strategy",
                       values_to = "empirical_fdr") %>%
   subset(empirical_fdr_strategy==q_value_strategy) 
+stratified_sample = function(x){
+  to_return = c()
+  for (bin in levels(cut(0:1, 10))){
+    bin = bin %>% gsub("\\[|\\]|\\(|\\)", "", .) %>% strsplit(",") %>% extract2(1) %>% as.numeric
+    lo = bin[[1]]
+    hi = bin[[2]]
+    stratum = which(lo < x & x < hi)
+    to_return %<>% c(sample(stratum, min(100, length(stratum))))
+  }
+  to_return
+}  
+# Reduce the number of points or inkscape will go         v  e  r  y    s  l  o  w  l  y 
+W_long = W_long[union( stratified_sample(W_long$q_value), stratified_sample(W_long$empirical_fdr) ), ]
 ggplot(W_long) +  
   geom_point(aes(q_value, empirical_fdr, colour = q_value_strategy)) +  
   xlim(0:1) + ylim(0:1) + 
   geom_abline(aes(slope = 1, intercept = 0)) + 
-  ggtitle("Merging is better calibrated")
-ggsave("merge_calibration.png", width = 5, height = 5)
+  ggtitle("Calibration")
+ggsave("merge_calibration.pdf", width = 5, height = 5)
 
-W_long %>% 
-  group_by(q_value_strategy, target) %>%
-  summarize(
-    false = sum(q_value<0.5 & !is_correct), 
-    true = sum(q_value<0.5 & is_correct), 
-  ) %>% 
-  dplyr::ungroup() %>%
-  tidyr::pivot_longer(cols = c("false", "true"),
-                      names_to = "type", 
-                      values_to = "discoveries") %>%
-  ggplot() + 
-  geom_histogram(aes(x = discoveries, 
-                     fill = type)) + 
-  facet_grid(~q_value_strategy) + 
-  xlab("Number of discoveries") + 
-  ylab("Number of targets")
-ggsave("discovery_count_by_method.png", width = 5, height = 5)
 
