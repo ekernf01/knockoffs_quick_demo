@@ -75,7 +75,7 @@ stratified_sample = function(x){
   }
   to_return
 }  
-# Reduce the number of points or inkscape will go         v  e  r  y    s  l  o  w  l  y 
+# Reduce the number of points or inkscape will go         v  e  r  y    s  l  o  w  l  y     on my dinky laptop
 W_long = W_long[union( stratified_sample(W_long$q_value), stratified_sample(W_long$empirical_fdr) ), ]
 ggplot(W_long) +  
   geom_point(aes(q_value, empirical_fdr, colour = q_value_strategy)) +  
